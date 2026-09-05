@@ -6,7 +6,7 @@
       "title": "稼働状況ページを開設しました",
       "scope": "牛カードをご利用のすべてのお客様",
       "eta": "",
-      "showInApp": true,
+      "showInApp": false,
       "reports": [
         {
           "kind": "progress",

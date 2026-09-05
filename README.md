@@ -4,8 +4,13 @@
 お客様にお知らせするためのページです。
 
 - 公開URL: https://status.ushi-card.com/
-- 予備URL: https://hiromi-ushicard.github.io/ushi-card-status/
-  （独自ドメインのDNSが引けないときは、こちらを案内してください）
+- 予備URL: https://github.com/hiromi-ushicard/ushi-card-status/blob/main/status.json
+  （公開URLが開けないときは、こちらを案内してください。
+  見た目は整っていませんが、お知らせの文章そのものが読めます）
+
+> ⚠️ `https://hiromi-ushicard.github.io/ushi-card-status/` は**予備になりません。**
+> このURLを開くと、自動で公開URL（`status.ushi-card.com`）へ転送されるためです。
+> 公開URLが開けないときは、こちらも同じように開けません（2026-09-05 確認）。
 
 ## なぜアプリの外に置いているのか
 
