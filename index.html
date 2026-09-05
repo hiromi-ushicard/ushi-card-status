@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>牛カード 稼働状況</title>
+<style>
+  :root {
+    --ink: #1b1b1b;
+    --sub: #5a5a5a;
+    --line: #d8d8d8;
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --ok: #1b7f3b;
+    --warn: #a45a00;
+    --bad: #b3261e;
+    --info: #14508c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0 16px 64px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Meiryo", sans-serif;
+    font-size: 18px;
+    line-height: 1.9;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  header { padding: 32px 0 8px; }
+  h1 { font-size: 1.6rem; margin: 0; }
+  h2 { font-size: 1.25rem; margin: 40px 0 12px; }
+  h3 { font-size: 1.1rem; margin: 0 0 8px; }
+  p { margin: 8px 0; }
+  .lead { color: var(--sub); font-size: 1rem; margin: 4px 0 0; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+  }
+  .overall { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; flex: none; }
+  .overall-text { font-size: 1.3rem; font-weight: 700; }
+  .ok    { color: var(--ok);   } .dot.ok    { background: var(--ok);   }
+  .warn  { color: var(--warn); } .dot.warn  { background: var(--warn); }
+  .bad   { color: var(--bad);  } .dot.bad   { background: var(--bad);  }
+  .info  { color: var(--info); } .dot.info  { background: var(--info); }
+  .badge {
+    display: inline-block;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    padding: 0 12px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.8;
+  }
+  .meta { margin: 12px 0 0; font-size: 0.95rem; }
+  .meta dt { color: var(--sub); font-size: 0.85rem; }
+  .meta dd { margin: 0 0 8px; }
+  .reports { list-style: none; margin: 16px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); }
+  .reports li { margin: 0 0 16px; }
+  .reports li:last-child { margin-bottom: 0; }
+  .report-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .report-kind { font-weight: 700; }
+  .report-at { color: var(--sub); font-size: 0.9rem; }
+  .report-body { margin: 2px 0 0; }
+  a { color: #14508c; }
+  footer { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 0.95rem; color: var(--sub); }
+  .mail { font-size: 1.15rem; font-weight: 700; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>牛カード 稼働状況</h1>
+    <p class="lead">牛カードが使えないときは、まずこのページをご覧ください。アプリとは別の場所で動いているため、アプリが停止していても表示されます。</p>
+  </header>
+
+  <div class="card overall" id="overall" aria-live="polite">
+    <span class="dot info" id="overall-dot"></span>
+    <span class="overall-text info" id="overall-text">読み込んでいます…</span>
+  </div>
+
+  <h2>障害・メンテナンスのお知らせ</h2>
+  <div id="notices"></div>
+
+  <h2>お問い合わせ</h2>
+  <div class="card">
+    <p>ご不明な点は、下記の窓口までご連絡ください。</p>
+    <p class="mail"><a href="mailto:ja6pbj+ushicard@gmail.com">ja6pbj+ushicard@gmail.com</a></p>
+    <p class="lead">お名前・農家名・いつごろから・どの画面で起きているかをお書き添えいただけると、調査が早く進みます。</p>
+  </div>
+
+  <footer>
+    <p><a href="https://ushi-card-backend-vz2azd2ukq-an.a.run.app">牛カードのアプリを開く</a></p>
+    <p id="updated"></p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var KIND_LABEL = { incident: '障害報告', progress: '経過報告', recovery: '復旧報告' };
+  var TYPE_LABEL = { incident: '障害', maintenance: 'メンテナンス', info: 'お知らせ' };
+  var TYPE_TONE  = { incident: 'bad', maintenance: 'warn', info: 'info' };
+
+  function fmt(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso || '';
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日 '
+      + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  // 復旧報告が入っている告知は「終わったもの」として扱う。
+  // 別に resolved フラグを置くと、報告と食い違ったときにどちらが正か分からなくなる。
+  function isClosed(notice) {
+    return (notice.reports || []).some(function (r) { return r.kind === 'recovery'; });
+  }
+
+  function overallOf(notices) {
+    var open = notices.filter(function (n) { return !isClosed(n); });
+    if (open.some(function (n) { return n.type === 'incident'; })) {
+      return { tone: 'bad', text: '障害が発生しています' };
+    }
+    if (open.some(function (n) { return n.type === 'maintenance'; })) {
+      return { tone: 'warn', text: 'メンテナンスの予定があります' };
+    }
+    return { tone: 'ok', text: '正常に稼働しています' };
+  }
+
+  function renderNotice(notice) {
+    var tone = TYPE_TONE[notice.type] || 'info';
+    var card = el('div', 'card');
+
+    var badge = el('span', 'badge ' + tone, TYPE_LABEL[notice.type] || 'お知らせ');
+    card.appendChild(badge);
+    if (isClosed(notice)) card.appendChild(el('span', 'badge ok', '復旧済み'));
+    card.appendChild(el('h3', null, notice.title || ''));
+
+    var reports = (notice.reports || []).slice().sort(function (a, b) {
+      return String(a.at).localeCompare(String(b.at));
+    });
+
+    var dl = el('dl', 'meta');
+    if (reports.length) {
+      dl.appendChild(el('dt', null, '発生日時'));
+      dl.appendChild(el('dd', null, fmt(reports[0].at)));
+    }
+    if (notice.scope) {
+      dl.appendChild(el('dt', null, '影響範囲'));
+      dl.appendChild(el('dd', null, notice.scope));
+    }
+    if (notice.eta) {
+      dl.appendChild(el('dt', null, isClosed(notice) ? '復旧日時' : '復旧見込み'));
+      dl.appendChild(el('dd', null, notice.eta));
+    }
+    card.appendChild(dl);
+
+    if (reports.length) {
+      var ul = el('ul', 'reports');
+      reports.slice().reverse().forEach(function (r) {
+        var li = el('li');
+        var head = el('div', 'report-head');
+        head.appendChild(el('span', 'report-kind', KIND_LABEL[r.kind] || 'お知らせ'));
+        head.appendChild(el('span', 'report-at', fmt(r.at)));
+        li.appendChild(head);
+        li.appendChild(el('p', 'report-body', r.body || ''));
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    }
+    return card;
+  }
+
+  function latestAt(notices) {
+    var all = [];
+    notices.forEach(function (n) {
+      (n.reports || []).forEach(function (r) { if (r.at) all.push(r.at); });
+    });
+    all.sort();
+    return all.length ? all[all.length - 1] : '';
+  }
+
+  function render(data) {
+    var notices = Array.isArray(data.notices) ? data.notices : [];
+    var overall = overallOf(notices);
+    document.getElementById('overall-dot').className = 'dot ' + overall.tone;
+    var text = document.getElementById('overall-text');
+    text.className = 'overall-text ' + overall.tone;
+    text.textContent = overall.text;
+
+    var box = document.getElementById('notices');
+    box.textContent = '';
+    if (!notices.length) {
+      var empty = el('div', 'card');
+      empty.appendChild(el('p', null, '現在、お知らせはありません。'));
+      box.appendChild(empty);
+    } else {
+      notices.slice().sort(function (a, b) {
+        return String(latestAt([b])).localeCompare(String(latestAt([a])));
+      }).forEach(function (n) { box.appendChild(renderNotice(n)); });
+    }
+
+    var last = latestAt(notices);
+    document.getElementById('updated').textContent = last ? '最終更新: ' + fmt(last) : '';
+  }
+
+  function fail() {
+    document.getElementById('overall-dot').className = 'dot warn';
+    var text = document.getElementById('overall-text');
+    text.className = 'overall-text warn';
+    text.textContent = '稼働状況を読み込めませんでした';
+    var box = document.getElementById('notices');
+    box.textContent = '';
+    var card = el('div', 'card');
+    card.appendChild(el('p', null, 'お手数ですが、ページを再読み込みしてください。それでも表示されない場合は、下記の窓口までご連絡ください。'));
+    var p = el('p');
+    var a = el('a', null, 'お知らせの元データを直接開く');
+    a.href = 'status.json';
+    p.appendChild(a);
+    card.appendChild(p);
+    box.appendChild(card);
+  }
+
+  fetch('status.json', { cache: 'no-store' })
+    .then(function (res) {
+      if (!res.ok) throw new Error(String(res.status));
+      return res.json();
+    })
+    .then(render)
+    .catch(fail);
+})();
+</script>
+</body>
+</html>
