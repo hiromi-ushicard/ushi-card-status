@@ -120,10 +120,22 @@
     return n;
   }
 
-  // 復旧報告が入っている告知は「終わったもの」として扱う。
+  // 報告を古い順に並べる（牛カード側 serviceStatus.ts の toNotice と同じ比較値）。
+  function sortedReports(notice) {
+    return (notice.reports || []).slice().sort(function (a, b) {
+      return String(a.at).localeCompare(String(b.at));
+    });
+  }
+
+  // **いちばん新しい報告が復旧報告なら**「終わったもの」として扱う。
   // 別に resolved フラグを置くと、報告と食い違ったときにどちらが正か分からなくなる。
+  // 「一度でも復旧報告が在れば終わり」とは見ない。再発して続報を足したときに
+  // 「復旧済み」のまま留まるからである。逆に復旧後の補足を報告として足すと障害中の表示に
+  // 戻ってしまうが、**続いている障害を終わったことにするより安全側**なのでこちらを採る
+  // （牛カード側 serviceStatus.ts の isRecovered と同じ規則）。
   function isClosed(notice) {
-    return (notice.reports || []).some(function (r) { return r.kind === 'recovery'; });
+    var reports = sortedReports(notice);
+    return reports.length > 0 && reports[reports.length - 1].kind === 'recovery';
   }
 
   // eta は「復旧見込み」と「実施予定時間帯」を兼ねる。復旧するのは障害だけなので、
@@ -155,9 +167,7 @@
     if (isClosed(notice)) card.appendChild(el('span', 'badge ok', '復旧済み'));
     card.appendChild(el('h3', null, notice.title || ''));
 
-    var reports = (notice.reports || []).slice().sort(function (a, b) {
-      return String(a.at).localeCompare(String(b.at));
-    });
+    var reports = sortedReports(notice);
 
     var dl = el('dl', 'meta');
     if (reports.length) {
