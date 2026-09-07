@@ -126,6 +126,15 @@
     return (notice.reports || []).some(function (r) { return r.kind === 'recovery'; });
   }
 
+  // eta は「復旧見込み」と「実施予定時間帯」を兼ねる。復旧するのは障害だけなので、
+  // 計画された作業（メンテナンス・お知らせ）に「復旧見込み」と出すと、
+  // 起きてもいない障害を知らせてしまう。見込みが実績に変わるのは種別共通。
+  // **アプリ内の帯（牛カードの ServiceStatusBanner.tsx の etaLabel）と同じ規則にしてある。**
+  function etaLabel(notice) {
+    if (notice.type === 'incident') return isClosed(notice) ? '復旧日時' : '復旧見込み';
+    return isClosed(notice) ? '実施日時' : '実施予定';
+  }
+
   function overallOf(notices) {
     var open = notices.filter(function (n) { return !isClosed(n); });
     if (open.some(function (n) { return n.type === 'incident'; })) {
@@ -160,7 +169,7 @@
       dl.appendChild(el('dd', null, notice.scope));
     }
     if (notice.eta) {
-      dl.appendChild(el('dt', null, isClosed(notice) ? '復旧日時' : '復旧見込み'));
+      dl.appendChild(el('dt', null, etaLabel(notice)));
       dl.appendChild(el('dd', null, notice.eta));
     }
     card.appendChild(dl);
